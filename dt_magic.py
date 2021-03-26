@@ -13,20 +13,57 @@ from IPython.core.magic import (
 )
 from IPython.core.getipython import get_ipython
 
-import os
-import pickle
+import os, pickle
 import num2words
 from dyslexia import NEEDED_PATH
-from dyslexia.english import wn_dict, ggtrans, EnDict
+from dyslexia.english import EnDict
+from dyslexia.word_net import wn_dict
+# from dyslexia.google_trans import gg_trans
 from dyslexia.ht import print_line, tan
 from dyslexia.youdao import yd_dict
 import pyperclip
+from googletrans import Translator
+
+## 使用 dyslexia.ht -> .pkl
+def pkl_check():
+    """将 dyslexia.ht 转化为 pkl 文件 可加快导入速度."""
+
+    try:
+        wp = NEEDED_PATH["dyslexia.pkl"]
+        print("已找到文件: {}. \n若需使用新的文件,请将其删掉后重新执行!".format(wp))
+    except KeyError:
+        print("未找到文件<dyslexia.pkl>!" "")
+
+        try:
+            wh = NEEDED_PATH["dyslexia.ht"]
+            print("已找到文件: {}!. \n现开始转化:".format(wh))
+
+            words = EnDict(wh)
+
+            wk = os.path.split(wh)[0] + "\\" + "dyslexia.pkl"
+            words.to_pickle(wk)
+
+            return wk
+
+        except KeyError:
+            print(
+                "未找到文件<dyslexia.ht>. 请下载后重试: https://github.com/y2sinx/dyslexia-data!"
+                ""
+            )
+            
+def pkl_to_en(file):
+    """取出pkl文件中的EnDict实例.
+    pkl文件必须是从EnDict().to_pickle()方式得到的,否则会出现莫名其妙的bug???"""
+    with open(file, "rb") as fp:
+        en = pickle.load(fp)
+    print("DigTan # {} # {}!".format(en.l, file))
+    return en
 
 
 ### 请指定文件 dyslexia.ht  的位置
-PATH_DYSLEXIA_HT = NEEDED_PATH['dyslexia.ht']    
-DT_DYSLEXIA = EnDict(PATH_DYSLEXIA_HT) 
-make_wl = DT_DYSLEXIA.make_wordlist
+
+DysLexia_Ht = pkl_to_en(NEEDED_PATH['dyslexia.pkl']) 
+make_wl = DysLexia_Ht.load(NEEDED_PATH['dyslexia-fz.ht']).make_wordlist
 
 ################################################################
 ## 与dyslexia相关的魔法命令
@@ -41,7 +78,7 @@ class DtMagic(Magics):
 
         if line.strip() == "":
             return "格式: %dt 单词或短语"
-        line = DT_DYSLEXIA.lookup_fz(line.strip())
+        line = DysLexia_Ht.lookup_fz(line.strip())
         if line != None:
             print_line(line)
 
@@ -52,14 +89,14 @@ class DtMagic(Magics):
         if line.strip() == "":
             return "格式: %dw word_matcher"
         matcher = line.strip()
-        return DT_DYSLEXIA_WORDS.match(matcher)
+        return DysLexia_Ht.match(matcher)
 
     @line_magic("dtl")
     def _dt_line(self, line):
         """查看单词或短语的含义,输出单行."""
         if line.strip() == "":
             return "格式: %dt word_or_phrase"
-        line = DT_DYSLEXIA.lookup_fz(line.strip())
+        line = DysLexia_Ht.lookup_fz(line.strip())
         if line != None:
             return line
 
@@ -122,13 +159,13 @@ class DtMagic(Magics):
         wn_dict(line.strip())
 
     @line_cell_magic("gg")
-    def _ggtrans(self, line, cell):
+    def _gg_trans(self, line, cell):
         """使用谷歌翻译API翻译段落的魔法命令."""
 
         if line.strip() == "0" or line.strip() == "False":
-            out = ggtrans(cell, en2cn=False)  ##中文转英文
+            out = gg_trans(cell, en2cn=False)  ##中文转英文
         else:  ##英文转中文
-            out = ggtrans(cell, en2cn=True)
+            out = gg_trans(cell, en2cn=True)
 
         print(out)
 

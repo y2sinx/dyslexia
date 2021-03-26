@@ -4,9 +4,6 @@ import json
 import pickle
 import difflib
 from fnmatch import fnmatchcase
-from nltk.corpus import words, wordnet
-from googletrans import Translator
-
 from dyslexia import common
 from dyslexia.youdao import yd_dict
 from dyslexia import ht
@@ -25,49 +22,6 @@ PUNCTUATION_NOT_IN_WORD = [
     p for p in PUNCTUATION if p not in PUNCTUATION_IN_WORD
 ]  ##不可以在单词当中存在的标点
 ENGLISH_LETTERS = list(string.ascii_letters)  ##英文字母
-
-################################################################
-## WordNet与googletrans
-################################################################
-def wn_dict(word="synonym", num=10):
-    """使用wordnet查看单词的同义词集,定义,例句,反义词;"""
-    groups = wordnet.synsets(word)
-    if len(groups) == 0:
-        return "Can' find!"
-    for i, group in enumerate(groups):
-        if i < num:
-            syn = group.lemma_names()  ##同义词集
-            ex = group.examples()  ##例子
-            Def = group.definition()  ##定义
-            ant = [
-                l.name()  # 反义词
-                for lm in group.lemmas()
-                if lm.antonyms()
-                for l in lm.antonyms()
-            ]
-
-            print("#{} {}".format(i + 1, group.name()))
-            print("-" * 32)
-
-            print("[syn]: {}".format(",".join(syn)))
-            print("[def]: {}".format(Def))
-
-            if len(ex) != 0:
-                print("[exm]: {}".format("; ".join(ex)))
-            if len(ant) != 0:
-                print("[ant]: {}".format(",".join(ant)))
-            print()
-
-
-def ggtrans(raw, en2cn=True):
-    """使用googletrans将英文翻译成中文或者将中文翻译成英文(en2cn=False)."""
-    translator = Translator(service_urls=["translate.google.cn"])
-    if en2cn:
-        text = translator.translate(raw, src="en", dest="zh-cn").text
-    else:
-        text = translator.translate(raw, src="zh-cn", dest="en").text
-    return common.punctuator(text)
-
 
 ################################################################
 ## EnDict
@@ -98,8 +52,8 @@ class EnDict:
 
         dn = ht.ht_to_dict(file, sep, check_tag)
         print("EnDict # {:4d} # {}!".format(len(dn), file))
-
         self.update(dn)
+
         return self  ##为了使用`EnDict().load()``
 
     def loads(self, dir_path, level=2):
@@ -157,7 +111,7 @@ class EnDict:
         return [wd for wd in self.t if fnmatchcase(wd, matcher)]
 
     def make_wordlist(self, words, file=common.UNF_TXT):
-        """使用bigtan创建单词表;"""
+        """使用 dyslexia 创建单词表;"""
         with open(file, "w", encoding="utf-8") as fp:
             for i, word in enumerate(words):
                 common.progress_bar(i + 1, len(words), word, trigger=10)
@@ -181,9 +135,13 @@ class EnDict:
         return self.to_line(word) if self.is_included(word) else "NOT INCLUDE!"
 
     def lookup_fz(self, word):
-        """在字典中查找单词的含义;若无是由有道查;"""
-
-        return self.to_line(word) if self.is_included(word) else yd_dict(word)
+        """在字典中查找单词的含义;若无是由有道查; 添加一个缓存文件"""
+        
+        if self.is_included(word):
+            out = self.to_line(word)
+        else:
+            out = yd_dict(word) + " $$->BF"
+        return out
 
     def to_line(self, word, sep="%"):
         """将self._base的一个键值对转化为一个字符串;"""
@@ -269,20 +227,16 @@ def get_raw_string(file):
         raw = f.read()
     return common.punctuator(raw)
 
+def my_tokenize(raw):
+    """输出字符串中的所有有效单词."""
 
-def my_tokenize(file):
-    """输出字幕文件中的所有有效单词."""
-    raw = get_raw_string(file)
-    raw = re.sub(u"[\u4e00-\u9fa5]+", " ", raw)  # 删除所有中文字符
-    raw = re.sub(u"[0-9]+", " ", raw)  # 删除所有的数字
-    raw = re.sub(u'[!"#$%&\()*+,./:;<=>?@[\\]^`{|}~—]', " ", raw)  # 替换所有的非词内标点(非_-及单引号)
-    tokens = re.split(r"\s+", raw)
-    tokens = list(set(tokens))
-    _ = [
-        tokens.remove(i) for i in tokens if len(i) < 2
-    ]  # 去除空串,字母,或单标点??['',"_",'-',"'"]
-    return tokens
+    raw = re.sub("[\u4e00-\u9fa5]+", " ", raw)  # 删除所有中文字符
+    raw = re.sub("[0-9]+", " ", raw)  # 删除所有的数字
+    raw = re.sub("-{2,}"," ",raw) ## "a--b" -> "a b"
+    raw = re.sub('[!"#$%&\()*+,./:;<=>?@[\\]^`{|}~—\'\n⋅]', ' ', raw)  ## 待替换的标点要放在[]内
 
+    tokens = set( re.split("\s+", raw) )
+    return list(tokens)
 
 from collections import defaultdict
 from dyslexia.english import similarity
